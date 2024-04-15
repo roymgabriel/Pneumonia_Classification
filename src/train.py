@@ -9,11 +9,12 @@ from datasets import get_data_loaders
 from utils import save_model, save_plots
 from torcheval import metrics
 from torcheval.metrics.toolkit import clone_metrics
+import pandas as pd
 
 # construct the argument parser
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    '-e', '--epochs', type=int, default=20,
+    '-e', '--epochs', type=int, default=2,
     help='Number of epochs to train our network for'
 )
 
@@ -29,7 +30,7 @@ parser.add_argument(
 
 
 parser.add_argument(
-    '-pt', '--pretrained', action='store_true',
+    '-pt', '--pretrained', action='store_true', default=True,
     help='Whether to use pretrained weights or not'
 )
 
@@ -60,15 +61,15 @@ parser.add_argument(
 )
 args = vars(parser.parse_args())
 
-def log_eval(epoch_idx, train_stat, val_stat, task_index=0):
+def log_eval(epoch_idx, train_stat, val_stat, test_stat, task_index=0):
 
 
     print(f"Epoch:{epoch_idx} =========================== \n")
-    meter_list = [train_stat[task_index], val_stat[task_index]]
+    meter_list = [train_stat[task_index], val_stat[task_index], test_stat[task_index]]
 
     # Log to console
     output_message = ""
-    for dataset_index, (meter, dataset_type) in enumerate(zip(meter_list, ["Train", "Test"])):
+    for dataset_index, (meter, dataset_type) in enumerate(zip(meter_list, ["Train", "Val", "Test"])):
         for metric_index, eval in enumerate(metrics_str):
             output_message += f"{dataset_type} {eval}:{meter_list[dataset_index][metric_index]:.4f} | "
             metric_vals[dataset_type][eval].append(meter_list[dataset_index][metric_index])
@@ -76,7 +77,7 @@ def log_eval(epoch_idx, train_stat, val_stat, task_index=0):
     print(output_message)
     print("\n")
 
-    return None
+    return metric_vals
 
 
 def calc_loss(logit, ys):
@@ -338,10 +339,17 @@ if __name__ == '__main__':
         test_compute = [[test_meters[0][metric_idx].compute().cpu().item() for metric_idx in
                         range(num_eval_metrics)] for task_idx in range(1)]
 
-        log_eval(epoch_idx, train_compute, val_compute, test_compute)
+        metric_vals = log_eval(epoch_idx=epoch, train_stat=train_compute, val_stat=val_compute, test_stat=test_compute)
+
+        # Get the current learning rate
+        current_lr = lr_scheduler.get_last_lr()
+        print(f"\nCurrent Learning Rate: {current_lr}\n")
+
         if lr_scheduler:
             lr_scheduler.step()
-            get_last_lr()
+
+    # change metric vals to pandas dictionary
+    metrics_df = pd.DataFrame(metric_vals)
 
     # Save the trained model weights.
     save_model(epochs=epochs,
@@ -351,13 +359,11 @@ if __name__ == '__main__':
                pretrained=pretrained,
                num_classes=num_classes,
                bayes_last=bayesian)
+
     # Save the loss and accuracy plots.
     save_plots(model=model,
                criterion=criterion,
-               train_acc=train_acc,
-               valid_acc=valid_acc,
-               train_loss=train_loss,
-               valid_loss=valid_loss,
+               metrics_df=metrics_df,
                pretrained=pretrained,
                num_classes=num_classes,
                bayes_last=bayesian)

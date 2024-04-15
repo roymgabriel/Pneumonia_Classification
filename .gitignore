@@ -1,5 +1,5 @@
 # ignore data file
-data/
+data/chest_xray
 
 # DS STORE
 .DS_Store
