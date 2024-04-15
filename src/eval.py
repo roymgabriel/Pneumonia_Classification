@@ -37,13 +37,12 @@ def evaluate_model_performance(model, class_names, image_label_mapping, image_si
         image = image.to(device)
 
         # Forward pass through the image.
-        # TODO: Add forward pass time (computational cost)
-        # see: https://debuggercafe.com/pytorch-pretrained-efficientnet-model-image-classification/
         with torch.no_grad():
             outputs = model(image)
         outputs = outputs.softmax(1).argmax(1)
         outputs = outputs.detach().numpy()
         pred_class_name = class_names[np.argmax(outputs[0])]
+
         # print(f"GT: {gt_class_name}, Pred: {pred_class_name}")
         # Annotate the image with ground truth.
         # cv2.putText(

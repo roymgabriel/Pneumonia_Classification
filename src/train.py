@@ -7,6 +7,8 @@ from tqdm.auto import tqdm
 from model import build_effnet_model
 from datasets import get_datasets, get_data_loaders
 from utils import save_model, save_plots
+from torcheval import metrics
+from torcheval.metrics.toolkit import clone_metrics
 
 # construct the argument parser
 parser = argparse.ArgumentParser()
@@ -30,6 +32,11 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    '-nc', '--numclasses', action='store_true',
+    help='Whether binary or multi-class classifcation'
+)
+
+parser.add_argument(
     '-d', '--device', type=str, default='mps',
     help='what device to use'
 )
@@ -41,10 +48,79 @@ parser.add_argument(
 )
 args = vars(parser.parse_args())
 
+def log_eval(epoch_idx, train_stat, val_stat, task_index=0):
+
+
+    print(f"Epoch:{epoch_idx} =========================== \n")
+    meter_list = [train_stat[task_index], val_stat[task_index]]
+
+    # Log to console
+    output_message = ""
+    for dataset_index, (meter, dataset_type) in enumerate(zip(meter_list, ["Train", "Test"])):
+        for metric_index, eval in enumerate(cfg.metrics_str):
+            output_message += f"{dataset_type} {eval}:{meter_list[dataset_index][metric_index]:.4f} | "
+            cfg.metric_vals[dataset_type][eval].append(meter_list[dataset_index][metric_index])
+        output_message += "\n"
+    print(output_message)
+    print("\n")
+
+    return None
+
+
+def calc_loss(logit, ys):
+    losses = []
+
+    y = ys.reshape(-1)
+    loss = 0
+    l = criterion(logit, y)
+    loss += l
+    losses.append(l)
+
+    return losses, loss
+
+def evaluate(meters, logits, ys, losses, task_index=0):
+    logit = logits.detach()
+    y = ys.reshape(-1).detach()
+    loss = losses[task_index].detach()
+
+    # Store the values needed to calculate the mean of losses [0], accuracy [1], precision [2], recall [3], and F1 score [4] later.
+    if cfg.NUM_CLASSES == 2:
+        meters[task_index][0].update(loss)
+        meters[task_index][1].update(logit.softmax(1).argmax(1), y)
+        meters[task_index][2].update(logit.softmax(1).argmax(1), y)
+        meters[task_index][3].update(logit.softmax(1).argmax(1), y)
+        meters[task_index][4].update(logit.softmax(1).argmax(1), y)
+        meters[task_index][5].update(logit.softmax(1).argmax(1), y)
+        meters[task_index][6].update(logit.softmax(1).argmax(1), y)
+    else:
+        meters[task_index][0].update(loss)
+        meters[task_index][1].update(logit, y)
+        meters[task_index][2].update(logit, y)
+        meters[task_index][3].update(logit, y)
+        meters[task_index][4].update(logit, y)
+        meters[task_index][5].update(logit, y)
+        meters[task_index][6].update(logit, y)
+
+    return meters
+
 
 # Training function.
 def train(model, trainloader, optimizer, criterion):
     model.train()
+
+    # Ensure that the template eval_metrics are empty before cloning them. Nothing should be changing them,
+    # but just to be certain.
+    for i in range(num_eval_metrics):
+        eval_metrics[i].reset()
+
+    # This creates multiple copies of metrics for the multiple tasks.
+    # Each clone of eval_metrics creates a list of new torcheval metric instances, which each
+    # store all the values needed to calculate their metric for one task in this epoch.
+    # The metric is only calculated once .compute() is called on the metric instance.
+    train_meters = [clone_metrics(eval_metrics) for i in range(1)]
+    val_meters = [clone_metrics(eval_metrics) for i in range(1)]
+    test_meters = [clone_metrics(eval_metrics) for i in range(1)]
+
     print('Training')
     train_running_loss = 0.0
     train_running_correct = 0
@@ -66,30 +142,36 @@ def train(model, trainloader, optimizer, criterion):
             # Forward pass.
             outputs = model(image)
 
-            # Calculate the loss.
-            loss = criterion(outputs, labels)
-            train_running_loss += loss.item()
-            # Calculate the accuracy.
-            _, preds = torch.max(outputs.data, 1)
-            train_running_correct += (preds == labels).sum().item()
+            # # Calculate the loss.
+            # loss = criterion(outputs, labels)
+            # train_running_loss += loss.item()
+            # # Calculate the accuracy.
+            # _, preds = torch.max(outputs.data, 1)
+            # train_running_correct += (preds == labels).sum().item()
+
+            losses, loss = calc_loss(outputs, labels)
+            (loss).backward()
+            optimizer.step()
+            train_meters = evaluate(train_meters, outputs, labels, losses)
+
             # Backpropagation
             loss.backward()
             # Update the weights.
             optimizer.step()
-        return train_running_loss, train_running_correct, counter
+        return train_meters
 
-    train_running_loss, train_running_correct, counter = foo_wrapper(model, train_running_loss, train_running_correct, counter)
+    train_meters = foo_wrapper(model, train_running_loss, train_running_correct, counter)
 
     # Loss and accuracy for the complete epoch.
-    epoch_loss = train_running_loss / counter
-    epoch_acc = 100. * (train_running_correct / len(trainloader.dataset))
-    return epoch_loss, epoch_acc
+    # epoch_loss = train_running_loss / counter
+    # epoch_acc = 100. * (train_running_correct / len(trainloader.dataset))
+    return train_meters
 
 
 # Validation function.
 def validate(model, testloader, criterion):
     model.eval()
-    print('Validation')
+    print('Testing')
     valid_running_loss = 0.0
     valid_running_correct = 0
     counter = 0
@@ -103,16 +185,20 @@ def validate(model, testloader, criterion):
             # Forward pass.
             outputs = model(image)
             # Calculate the loss.
-            loss = criterion(outputs, labels)
-            valid_running_loss += loss.item()
-            # Calculate the accuracy.
-            _, preds = torch.max(outputs.data, 1)
-            valid_running_correct += (preds == labels).sum().item()
+            # loss = criterion(outputs, labels)
+            # valid_running_loss += loss.item()
+            # # Calculate the accuracy.
+            # _, preds = torch.max(outputs.data, 1)
+            # valid_running_correct += (preds == labels).sum().item()
+
+            losses, loss = calc_loss(outputs, labels)
+            val_meters = evaluate(val_meters, outputs, labels, losses)
+
 
     # Loss and accuracy for the complete epoch.
-    epoch_loss = valid_running_loss / counter
-    epoch_acc = 100. * (valid_running_correct / len(testloader.dataset))
-    return epoch_loss, epoch_acc
+    # epoch_loss = valid_running_loss / counter
+    # epoch_acc = 100. * (valid_running_correct / len(testloader.dataset))
+    return val_meters
 
 
 if __name__ == '__main__':
@@ -132,24 +218,71 @@ if __name__ == '__main__':
     epochs = args['epochs']
     device = args['device']
     bayesian = args['bayesian']
+    NUM_CLASSES = args['num_classes']
+
     print(f"Computation device: {device}")
     print(f"Learning rate: {lr}")
     print(f"Epochs to train for: {epochs}\n")
     print(f"Bayesian Last Layer Only: {bayesian}\n")
+
     model = build_effnet_model(
         pretrained=args['pretrained'],
         fine_tune=args['finetune'],
         bayes_last=args['bayesian'],
-        num_classes=len(dataset_classes)
+        num_classes=NUM_CLASSES
     ).to(device)
+
+    OPTIM = torch.optim.SGD
+    OPTIM_PARAMETERS = {
+        'lr': lr,
+        'weight_decay': 0.1,
+        'momentum': 0.9
+    }
+    LR_SCHEDULER = torch.optim.lr_scheduler.CosineAnnealingLR
+    LR_SCHEDULER_PARAMETERS = {
+        'T_max': NUM_EPOCHS, 'eta_min': 0, 'last_epoch': - 1, 'verbose': False
+    }
+
+
+    if NUM_CLASSES == 2:
+        eval_metrics = [
+            metrics.Mean(device=device),
+            metrics.BinaryAccuracy(device=device),
+            metrics.BinaryPrecision(device=device),
+            metrics.BinaryRecall(device=device),
+            metrics.BinaryF1Score(device=device),
+            metrics.BinaryAUROC(device=device),
+            metrics.BinaryAUPRC(device=device)
+        ]
+    else:
+        eval_metrics = [
+            metrics.Mean(device=device),
+            metrics.MulticlassAccuracy(device=device, average="macro", num_classes=NUM_CLASSES),
+            metrics.MulticlassPrecision(device=device, average="macro", num_classes=NUM_CLASSES),
+            metrics.MulticlassRecall(device=device, average="macro", num_classes=NUM_CLASSES),
+            metrics.MulticlassF1Score(device=device, average="macro", num_classes=NUM_CLASSES),
+            metrics.MulticlassAUROC(device=device, average="macro", num_classes=NUM_CLASSES),
+            metrics.MulticlassAUPRC(device=device, average="macro", num_classes=NUM_CLASSES)
+        ]
+    num_eval_metrics = len(eval_metrics)
+
+
+    metrics_str = ["loss", "accuracy", "precision", "recall", "F1", "AUC ROC", "AUC PRC"]
+    metric_vals = {'Train': {}, 'Val': {}, 'Test': {}}
+    for key in metric_vals:
+        metric_vals[key] = {metric: [] for metric in metrics_str}
+
 
     # Total parameters and trainable parameters.
     total_params = sum(p.numel() for p in model.parameters())
     print(f"{total_params:,} total parameters.")
     total_trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"{total_trainable_params:,} training parameters.")
+
     # Optimizer.
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = cfg.OPTIM(model.parameters(), **cfg.OPTIM_PARAMETERS)
+    lr_scheduler = cfg.LR_SCHEDULER(optimizer, cfg.NUM_EPOCHS, eta_min=0, last_epoch=- 1, verbose=True)
+
     # Loss function.
     criterion = nn.CrossEntropyLoss()
     # Lists to keep track of losses and accuracies.
@@ -158,18 +291,28 @@ if __name__ == '__main__':
     # Start the training.
     for epoch in range(epochs):
         print(f"[INFO]: Epoch {epoch + 1} of {epochs}")
-        train_epoch_loss, train_epoch_acc = train(model, train_loader,
-                                                  optimizer, criterion)
-        valid_epoch_loss, valid_epoch_acc = validate(model, valid_loader,
-                                                     criterion)
-        train_loss.append(train_epoch_loss)
-        valid_loss.append(valid_epoch_loss)
-        train_acc.append(train_epoch_acc)
-        valid_acc.append(valid_epoch_acc)
-        print(f"Training loss: {train_epoch_loss:.3f}, training acc: {train_epoch_acc:.3f}")
-        print(f"Validation loss: {valid_epoch_loss:.3f}, validation acc: {valid_epoch_acc:.3f}")
-        print('-' * 50)
-        time.sleep(5)
+        train_meters = train(model, train_loader, optimizer, criterion)
+        val_meters = validate(model, valid_loader, criterion)
+        # train_loss.append(train_epoch_loss)
+        # valid_loss.append(valid_epoch_loss)
+        # train_acc.append(train_epoch_acc)
+        # valid_acc.append(valid_epoch_acc)
+        # print(f"Training loss: {train_epoch_loss:.3f}, training acc: {train_epoch_acc:.3f}")
+        # print(f"Validation loss: {valid_epoch_loss:.3f}, validation acc: {valid_epoch_acc:.3f}")
+        # print('-' * 50)
+        # time.sleep(5)
+
+        # Compute all the metrics by calling .compute() on each of the metric instances,
+        # and store them in a list with the same structure as train_meters, val_meters, test_meters.
+        task_idx = 0
+        train_compute = [[train_meters[0][metric_idx].compute().cpu().item() for metric_idx in
+                              range(num_eval_metrics)] for task_idx in range(1)]
+        val_compute = [[val_meters[0][metric_idx].compute().cpu().item() for metric_idx in
+                        range(num_eval_metrics)] for task_idx in range(1)]
+
+        log_eval(epoch_idx, train_compute, val_compute, test_compute)
+        if lr_scheduler:
+            lr_scheduler.step()
 
     # Save the trained model weights.
     save_model(epochs=epochs,
