@@ -14,7 +14,7 @@ import pandas as pd
 # construct the argument parser
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    '-e', '--epochs', type=int, default=2,
+    '-e', '--epochs', type=int, default=5,
     help='Number of epochs to train our network for'
 )
 
@@ -45,7 +45,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    '-nc', '--numclasses', type=int, default=2,
+    '-nc', '--numclasses', type=int, default=3,
     help='Whether binary or multi-class classifcation'
 )
 
@@ -181,8 +181,8 @@ def validate(model, testloader, criterion):
     model.eval()
     val_meters = [clone_metrics(eval_metrics) for i in range(1)]
     print('Testing')
-    valid_running_loss = 0.0
-    valid_running_correct = 0
+    # valid_running_loss = 0.0
+    # valid_running_correct = 0
     counter = 0
     with torch.no_grad():
         for i, data in tqdm(enumerate(testloader), total=len(testloader)):
@@ -201,6 +201,7 @@ def validate(model, testloader, criterion):
             # valid_running_correct += (preds == labels).sum().item()
 
             losses, loss = calc_loss(outputs, labels)
+            # print(labels)
             val_meters = evaluate(val_meters, outputs, labels, losses)
 
 
@@ -211,14 +212,10 @@ def validate(model, testloader, criterion):
 
 
 if __name__ == '__main__':
-    # torch.set_default_device("mps")
-    # Load the training and validation datasets.
-    # dataset_train, dataset_valid, dataset_test,\
-    #     dataset_classes = get_datasets(is_binary=True, pretrained=args['pretrained'])
-    # print(f"[INFO]: Number of training images: {len(dataset_train)}")
-    # print(f"[INFO]: Number of validation images: {len(dataset_valid)}")
-    # print(f"[INFO]: Number of testing images: {len(dataset_test)}")
-    # print(f"[INFO]: Class names: {dataset_classes}\n")
+    data_dir = "./data/chest_xray/"
+
+    TEST_SIZE = 0.2
+    VAL_SIZE = 0.1
 
     # Learning_parameters.
     lr = args['learning_rate']
@@ -231,6 +228,21 @@ if __name__ == '__main__':
     batch_size=args['batchsize']
     num_workers=args['numworkers']
 
+    # Load the training and validation datasets.
+    train_data, val_data, test_data, train_loader, val_loader, test_loader = get_data_loaders(data_dir=data_dir, batch_size=batch_size,\
+        num_workers=num_workers, num_classes=num_classes, image_size=224, pretrained=pretrained, test_size=TEST_SIZE, val_size=VAL_SIZE)
+
+    print(f"[INFO]: Number of training images: {len(train_data)}")
+    print(f"[INFO]: Number of validation images: {len(val_data)}")
+    print(f"[INFO]: Number of testing images: {len(test_data)}")
+    if num_classes == 2:
+        print("[INFO]: Class names: ['NORMAL', 'PNEUMONIA'].\n")
+    else:
+        print("[INFO]: Class names: ['NORMAL', 'VIRUS PNEUMONIA', 'BACTERIA PNEUMONIA'].\n")
+
+    # delete from memory to conserve
+    del train_data, val_data, test_data
+
     print(f"Computation device: {device}")
     print(f"Learning rate: {lr}")
     print(f"Epochs to train for: {epochs}")
@@ -241,11 +253,6 @@ if __name__ == '__main__':
     print(f"Batch Size: {batch_size}")
     print(f"Number of Workers: {num_workers}\n")
 
-    data_dir = "./data/chest_xray/"
-
-    # Load the training and validation data loaders.
-    train_loader, valid_loader, test_loader = get_data_loaders(data_dir=data_dir, batch_size=batch_size,\
-        num_workers=num_workers, num_classes=num_classes, image_size=224, pretrained=pretrained)
 
     model = build_effnet_model(
         pretrained=pretrained,
@@ -316,7 +323,7 @@ if __name__ == '__main__':
     for epoch in range(epochs):
         print(f"[INFO]: Epoch {epoch + 1} of {epochs}")
         train_meters = train(model, train_loader, optimizer, criterion)
-        val_meters = validate(model, valid_loader, criterion)
+        val_meters = validate(model, val_loader, criterion)
         test_meters = validate(model, test_loader, criterion)
 
         # train_loss.append(train_epoch_loss)
