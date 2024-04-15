@@ -5,19 +5,19 @@ import os
 from sklearn.model_selection import train_test_split
 from PIL import Image
 
-# Required constants.
-ROOT_DIR = '../data/panel_data_rsna.csv'
-VALID_SPLIT = None
-TEST_SPLIT = 0.1
-IMAGE_SIZE = 224  # Image size of resize when applying transforms.
-BATCH_SIZE = 16
-NUM_WORKERS = 3  # Number of parallel processes for data preparation.
+# # Required constants.
+# ROOT_DIR = '../data/chest_xray.csv'
+# VALID_SPLIT = None
+# TEST_SPLIT = 0.1
+# IMAGE_SIZE = 224  # Image size of resize when applying transforms.
+# BATCH_SIZE = 16
+# NUM_WORKERS = 3  # Number of parallel processes for data preparation.
 
 
 # Training transforms
-def get_train_transform(IMAGE_SIZE, pretrained):
+def get_train_transform(image_size, pretrained):
     train_transform = transforms.Compose([
-        transforms.Resize((image_size_0, image_size_0)),
+        transforms.Resize((image_size, image_size)),
         transforms.Grayscale(3),
         transforms.CenterCrop(224),
         transforms.RandomHorizontalFlip(p=0.5),
@@ -36,9 +36,9 @@ def get_train_transform(IMAGE_SIZE, pretrained):
 
 
 # Validation transforms
-def get_test_transform(IMAGE_SIZE, pretrained):
+def get_test_transform(image_size, pretrained):
     test_transform = transforms.Compose([
-        transforms.Resize((image_size_0, image_size_0)),
+        transforms.Resize((image_size, image_size)),
         transforms.Grayscale(3),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
@@ -62,28 +62,63 @@ def normalize_transform(pretrained):
     return normalize
 
 
-# Assuming you have a custom dataset class
-class CustomDataset(Dataset):
-    def __init__(self, dataframe, target_col, transform=None):
-        self.dataframe = dataframe
+class ChestXRayDataset(Dataset):
+    def __init__(self, root_dir, transform=None, num_classes=2):
+        '''
+        Args:
+            root_dir (string): Directory with all the images.
+            transform (callable, optional): Optional transform to be applied on a sample.
+            num_classes (int): Number of classes to differentiate (2 for binary, 3 for multi-class).
+        '''
+        self.root_dir = root_dir
         self.transform = transform
+        self.num_classes = num_classes
+        self.data = []
+        self.load_data()
 
-        # fix image path in dataframe
-        self.dataframe['patientId'] = self.dataframe['patientId'].apply(lambda x: "../data/imgs/train/" + x + ".jpg")
+    def load_data(self):
+        """
+        Loads data from pneumonia kaggle dataset
+        Binary:
+        0: NORMAL
+        1: PNEUMONIA
 
-        # define target col name
-        self.target_col = target_col
+        Multi:
+        0: NORMAL
+        1: VIRUS PNEUMONIA
+        2: BACTERIA PNEUMONIA
+        """
+        normal_dir = os.path.join(self.root_dir, 'NORMAL')
+        pneumonia_dir = os.path.join(self.root_dir, 'PNEUMONIA')
+
+        # Load NORMAL images
+        try:
+            for img_file in os.listdir(normal_dir):
+                self.data.append((os.path.join(normal_dir, img_file), 0))
+        except FileNotFoundError as e:
+            # sometimes you need '../' instead of './' depending on IDE and PATH
+            self.root_dir = '.' + self.root_dir
+            normal_dir = os.path.join(self.root_dir, 'NORMAL')
+            pneumonia_dir = os.path.join(self.root_dir, 'PNEUMONIA')
+            for img_file in os.listdir(normal_dir):
+                self.data.append((os.path.join(normal_dir, img_file), 0))
+
+        # Load PNEUMONIA images and classify if required
+        for img_file in os.listdir(pneumonia_dir):
+            if self.num_classes == 2:
+                self.data.append((os.path.join(pneumonia_dir, img_file), 1))
+            else:
+                if '_virus_' in img_file:
+                    self.data.append((os.path.join(pneumonia_dir, img_file), 1))
+                elif '_bacteria_' in img_file:
+                    self.data.append((os.path.join(pneumonia_dir, img_file), 2))
 
     def __len__(self):
-        return len(self.dataframe)
+        return len(self.data)
 
     def __getitem__(self, idx):
-        # Assuming 'ImagePath' column contains paths to images
-        img_path = self.dataframe.iloc[idx]['patientId']
-        image = Image.open(img_path).convert("RGB")
-
-        # Assuming you have other columns like labels
-        label = self.dataframe.iloc[idx][self.target_col]
+        img_path, label = self.data[idx]
+        image = Image.open(img_path).convert('RGB')
 
         if self.transform:
             image = self.transform(image)
@@ -91,33 +126,16 @@ class CustomDataset(Dataset):
         return image, label
 
 
-def get_datasets(pretrained, is_binary, random_state=42, sample_num=None):
-    """
-    Function that obtains the datasets
-    :type random_state: int
-    """
-    target_col = 'Target' if is_binary else 'class'
-    panel_data = pd.read_csv("../data/panel_data_rsna.csv")
-    if sample_num is not None:
-        panel_data = panel_data.sample(sample_num) # make it shorter so it runs faster
-    train_data, test_data = train_test_split(panel_data, test_size=TEST_SPLIT, random_state=random_state)
+def get_data_loaders(data_dir, batch_size=16, num_workers=3, num_classes=2, image_size=224, pretrained=True):
+    train_transform = get_train_transform(image_size=image_size, pretrained=pretrained)
+    test_val_transform = get_test_transform(image_size=image_size, pretrained=pretrained)
 
-    # Further split training data into training and validation sets (90% training, 10% validation)
-    train_data, val_data = train_test_split(train_data, test_size=VALID_SPLIT, random_state=random_state)
+    train_dataset = ChestXRayDataset(os.path.join(data_dir, 'train'), transform=train_transform, num_classes=num_classes)
+    val_dataset = ChestXRayDataset(os.path.join(data_dir, 'val'), transform=test_val_transform, num_classes=num_classes)
+    test_dataset = ChestXRayDataset(os.path.join(data_dir, 'test'), transform=test_val_transform, num_classes=num_classes)
 
-    # Define transforms
-    train_transform = get_train_transform(IMAGE_SIZE, pretrained=pretrained)  # Assuming training from scratch
-    test_transform = get_test_transform(IMAGE_SIZE, pretrained=pretrained)  # Assuming training from scratch
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
-    # Create datasets and data loaders
-    train_dataset = CustomDataset(train_data, target_col=target_col, transform=train_transform)
-    valid_dataset = CustomDataset(val_data, target_col=target_col, transform=test_transform)
-    test_dataset = CustomDataset(test_data, target_col=target_col, transform=test_transform)
-    return train_dataset, valid_dataset, test_dataset, panel_data[target_col].unique()
-
-
-def get_data_loaders(train_dataset, valid_dataset, test_dataset):
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS)
-    valid_loader = DataLoader(valid_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
-    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS)
-    return train_loader, valid_loader, test_loader
+    return train_loader, val_loader, test_loader
