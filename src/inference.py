@@ -18,15 +18,15 @@ target_col = 'Target'  # annotationNumber
 class_names = [1, 2, 3, 4, 5] if target_col == "annotationNumber" else [0, 1]
 pretrained = True
 num_classes = len(class_names)
-bayes_last = False
+bayes_type = 'last'
 loss_name = "CrossEntropyLoss"
 
 # Load the trained model.
-model = build_effnet_model(pretrained=pretrained, fine_tune=False, num_classes=num_classes, bayes_last=bayes_last)
+model = build_effnet_model(pretrained=pretrained, fine_tune=False, num_classes=num_classes, bayes_type=bayes_type)
 model_name = model.__class__.__name__
 
 # checkpoint = torch.load('../results/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_numClass_2.pth', map_location=DEVICE)
-checkpoint = torch.load(f'../results/model{model_name}_pretrained_{pretrained}_loss_{loss_name}_bayesianLast_{bayes_last}_numClass_{num_classes}.pth',
+checkpoint = torch.load(f'../results/model{model_name}_pretrained_{pretrained}_loss_{loss_name}_bayesianType_{bayes_type}_numClass_{num_classes}.pth',
                         map_location=DEVICE)
 
 print('Loading trained model weights...')

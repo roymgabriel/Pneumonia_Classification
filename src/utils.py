@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 matplotlib.style.use('ggplot')
 
 
-def save_model(epochs, model, optimizer, criterion, pretrained, num_classes, bayes_last):
+def save_model(epochs, model, optimizer, criterion, pretrained, num_classes, bayes_type):
     """
     Function to save the trained model to disk.
     """
@@ -21,16 +21,16 @@ def save_model(epochs, model, optimizer, criterion, pretrained, num_classes, bay
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'loss': criterion,
-        }, f"../results/{tmp_dir}/model{model_name}_pretrained_{pretrained}_loss_{loss_name}_bayesianLast_{bayes_last}_numClass_{num_classes}.pth")
+        }, f"../results/{tmp_dir}/model{model_name}_pretrained_{pretrained}_loss_{loss_name}_bayesianType_{bayes_type}_numClass_{num_classes}.pth")
     except:
         torch.save({
             'epoch': epochs,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'loss': criterion,
-        }, f"./results/{tmp_dir}/model{model_name}_pretrained_{pretrained}_loss_{loss_name}_bayesianLast_{bayes_last}_numClass_{num_classes}.pth")
+        }, f"./results/{tmp_dir}/model{model_name}_pretrained_{pretrained}_loss_{loss_name}_bayesianType_{bayes_type}_numClass_{num_classes}.pth")
 
-def save_plots(model, criterion, metrics_df, pretrained, num_classes, bayes_last):
+def save_plots(model, criterion, metrics_df, pretrained, num_classes, bayes_type):
     """
     Function to save the loss and accuracy plots to disk.
     """
@@ -44,10 +44,10 @@ def save_plots(model, criterion, metrics_df, pretrained, num_classes, bayes_last
 
     # save to csv first
     try:
-        csv_save_path = f"./results/{tmp_dir}/df_model_{model_name}_pretrained_{pretrained}_loss_{loss_name}_numClass_{num_classes}_Bay_{bayes_last}.csv"
+        csv_save_path = f"./results/{tmp_dir}/df_model_{model_name}_pretrained_{pretrained}_loss_{loss_name}_numClass_{num_classes}_Bay_{bayes_type}.csv"
         metrics_df.to_csv(csv_save_path)
     except:
-        csv_save_path = f"../results/{tmp_dir}/df_model_{model_name}_pretrained_{pretrained}_loss_{loss_name}_numClass_{num_classes}_Bay_{bayes_last}.csv"
+        csv_save_path = f"../results/{tmp_dir}/df_model_{model_name}_pretrained_{pretrained}_loss_{loss_name}_numClass_{num_classes}_Bay_{bayes_type}.csv"
         metrics_df.to_csv(csv_save_path)
 
     for m_name in metrics_df.index:
@@ -59,7 +59,7 @@ def save_plots(model, criterion, metrics_df, pretrained, num_classes, bayes_last
         plt.plot(m_vals_train, linestyle='dashed', color='green', label='Train')
         plt.plot(m_vals_val, linestyle='dotted', color='purple', label='Val')
         plt.plot(m_vals_test, linestyle='solid', color='gold', label='Test')
-        save_path = f"./results/{tmp_dir}/plot_model_{model_name}_{pretrained}_loss_{loss_name}_numClass_{num_classes}_Bay_{bayes_last}_metric_{y_label}.jpg"
+        save_path = f"./results/{tmp_dir}/plot_model_{model_name}_{pretrained}_loss_{loss_name}_numClass_{num_classes}_Bay_{bayes_type}_metric_{y_label}.jpg"
         plt.legend()
         plt.xlabel('Epochs')
         plt.ylabel(y_label.capitalize())
