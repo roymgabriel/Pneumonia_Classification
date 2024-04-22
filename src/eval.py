@@ -1,4 +1,4 @@
-from sklearn.metrics import confusion_matrix, classification_report, roc_curve, auc
+from sklearn.metrics import confusion_matrix, classification_report, roc_curve, auc, precision_recall_curve
 import seaborn as sns
 import matplotlib.pyplot as plt
 import cv2
@@ -7,31 +7,51 @@ from torchvision import transforms
 import torch
 import pandas as pd
 from model import build_effnet_model
+from datasets import get_data_loaders
+from PIL import Image
 
 
-def evaluate_model_performance(model, class_names, image_label_mapping, image_size, device='cpu'):
+# Validation transforms
+def get_test_transform(image_size, pretrained):
+    test_transform = transforms.Compose([
+        transforms.Resize((image_size, image_size)),
+        transforms.Grayscale(3),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        normalize_transform(pretrained)
+    ])
+    return test_transform
+
+
+# Image normalization transforms.
+def normalize_transform(pretrained):
+    if pretrained:  # Normalization for pre-trained weights.
+        normalize = transforms.Normalize(
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+    else:  # Normalization when training from scratch.
+        normalize = transforms.Normalize(
+            mean=[0.5, 0.5, 0.5],
+            std=[0.5, 0.5, 0.5]
+        )
+    return normalize
+
+def evaluate_model_performance(model, class_names, image_label_mapping, image_size, pretrained=True, device='cpu'):
     y_true = []
     y_pred = []
 
     # Iterate over all the images and do forward pass.
-    for image_path in image_label_mapping.keys():
+    for image_path in image_label_mapping:
         # Get the ground truth class name from the image path.
         gt_class_name = image_label_mapping.get(image_path, "Unknown")
 
-        image = cv2.imread(image_path)
+        image = Image.open(image_path).convert('RGB')
         # orig_image = image.copy()
 
         # Preprocess the image
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        transform = transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.Resize((image_size, image_size)),
-            transforms.ToTensor(),
-            transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225]
-            )
-        ])
+        transform = get_test_transform(image_size=image_size, pretrained=pretrained)
+
         image = transform(image)
         image = torch.unsqueeze(image, 0)
         image = image.to(device)
@@ -43,22 +63,6 @@ def evaluate_model_performance(model, class_names, image_label_mapping, image_si
         outputs = outputs.detach().numpy()
         pred_class_name = class_names[np.argmax(outputs[0])]
 
-        # print(f"GT: {gt_class_name}, Pred: {pred_class_name}")
-        # Annotate the image with ground truth.
-        # cv2.putText(
-        #     orig_image, f"GT: {gt_class_name}",
-        #     (10, 25), cv2.FONT_HERSHEY_SIMPLEX,
-        #     1.0, (0, 255, 0), 2, lineType=cv2.LINE_AA
-        # )
-        # # Annotate the image with prediction.
-        # cv2.putText(
-        #     orig_image, f"Pred: {pred_class_name}",
-        #     (10, 55), cv2.FONT_HERSHEY_SIMPLEX,
-        #     1.0, (100, 100, 225), 2, lineType=cv2.LINE_AA
-        # )
-        # cv2.imshow('Result', orig_image)
-        # # cv2.waitKey(0)
-        # cv2.imwrite(f"../results/tests/{image_path}__{str(gt_class_name)}.png", orig_image)
 
         y_true.append(gt_class_name)
         y_pred.append(pred_class_name)
@@ -86,7 +90,6 @@ def plot_classification_results(y_true, y_pred, class_names):
     plt.show()
 
     # Compute ROC curve and AUC
-    # Assuming binary classification
     fpr, tpr, _ = roc_curve(y_true, y_pred, pos_label=max(class_names))
     roc_auc = auc(fpr, tpr)
     plt.figure()
@@ -103,29 +106,63 @@ def plot_classification_results(y_true, y_pred, class_names):
     plt.show()
 
 
+    # Compute Precision-Recall curve and AUC
+    precision, recall, _ = precision_recall_curve(y_true, y_pred, pos_label=max(class_names))
+    prc_auc = auc(recall, precision)
+
+    plt.figure()
+    lw = 2
+    plt.plot(recall, precision, color='darkorange',
+            lw=lw, label='PR curve (area = %0.2f)' % prc_auc)
+    plt.fill_between(recall, precision, alpha=0.2, color='darkorange', lw=lw)  # Optional: fill under curve
+    plt.plot([0, 1], [max(y_true.mean(), 1e-6)], linestyle='--', color='navy', lw=lw)  # Horizontal line at class balance
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.title('Precision-Recall Curve')
+    plt.legend(loc="lower left")
+    plt.show()
+
+
 if __name__ == '__main__':
     # Constants.
-    DATA_PATH = '../data/imgs'
-    CSV_PATH = '../data/panel_data.csv'
-    IMAGE_SIZE = 224
+    data_dir = "./data/chest_xray/"
     DEVICE = 'cpu'
-    target_col = 'Target'  # annotationNumber
+    num_classes = 3
+    IMAGE_SIZE = 224
+
+    # read data
+    # Load the training and validation datasets.
+    _, _, test_data, _, _, _ = get_data_loaders(data_dir=data_dir)
 
     # Class names.
-    class_names = [1, 2, 3, 4, 5] if target_col == "annotationNumber" else [0, 1]
+    if num_classes == 2:
+        class_names = ['NORMAL', 'PNEUMONIA']
+    else:
+        class_names = ['NORMAL', 'VIRUS PNEUMONIA', 'BACTERIA PNEUMONIA']
 
     # Load the trained model.
-    model = build_effnet_model(pretrained=True, fine_tune=False, num_classes=len(class_names))
-    checkpoint = torch.load('../results/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss.pth', map_location=DEVICE)
+    model = build_effnet_model(pretrained=True, fine_tune=False, num_classes=num_classes, bayes_last=False)
+    if num_classes == 2:
+        try:
+            checkpoint = torch.load('../results/binary/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianLast_False_numClass_2.pth', map_location=DEVICE)
+        except:
+            checkpoint = torch.load('./results/binary/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianLast_False_numClass_2.pth', map_location=DEVICE)
+    else:
+        try:
+            checkpoint = torch.load('../results/multi/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianLast_False_numClass_3.pth', map_location=DEVICE)
+        except:
+            checkpoint = torch.load('./results/multi/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianLast_False_numClass_3.pth', map_location=DEVICE)
+
     print('Loading trained model weights...')
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
 
-    # Load ground truth labels from CSV file.
-    labels_df = pd.read_csv(CSV_PATH)
-    labels_df = labels_df.sample(20)
-    labels_df['ImagePath'] = labels_df['ImagePath'].apply(lambda x: "../" + x)
-    image_label_mapping = dict(zip(labels_df['ImagePath'], labels_df[target_col]))
+    # Load ground truth labels from file.
+    image_label_mapping = pd.DataFrame(test_data).iloc[:, 0]
+    labels_df = pd.DataFrame(test_data).iloc[:, 1]
+    labels_df = labels_df.sample(5)
 
     # Usage
     y_true, y_pred = evaluate_model_performance(model=model,
