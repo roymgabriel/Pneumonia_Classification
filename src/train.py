@@ -40,9 +40,10 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    '-by', '--bayesian', action='store_true', default=False,
-    help='Whether to make only last layer bayesian or every convolution layer including last linear layer'
+    '-by', '--bayesian', type=str, choices=['last', 'all', ''], default='',
+    help='Specifies which layers to make Bayesian: "last" for only the last layer, "all" for every convolution layer including the last linear layer, or "" (empty string) for none'
 )
+
 
 parser.add_argument(
     '-nc', '--numclasses', type=int, default=3,
@@ -144,7 +145,7 @@ def train(model, trainloader, optimizer, criterion):
         :param model:
         :return:
         """
-        for i, data in tqdm(enumerate(trainloader), total=len(trainloader)):
+        for i, data in tqdm(enumerate(trainloader), total=len(trainloader), desc='TRAINING'):
         # for i, data in enumerate(trainloader):
             counter += 1
             image, labels = data
@@ -185,7 +186,7 @@ def validate(model, testloader, criterion):
     # valid_running_correct = 0
     counter = 0
     with torch.no_grad():
-        for i, data in tqdm(enumerate(testloader), total=len(testloader)):
+        for i, data in tqdm(enumerate(testloader), total=len(testloader), desc='TESTING'):
             counter += 1
 
             image, labels = data
@@ -246,7 +247,7 @@ if __name__ == '__main__':
     print(f"Computation device: {device}")
     print(f"Learning rate: {lr}")
     print(f"Epochs to train for: {epochs}")
-    print(f"Bayesian Last Layer Only: {bayesian}")
+    print(f"Bayesian Last/All/None Layer: {bayesian}")
     print(f"Number of Classes: {num_classes}")
     print(f"Fine Tuned: {fine_tune}")
     print(f"Pretrained: {pretrained}")
@@ -257,7 +258,7 @@ if __name__ == '__main__':
     model = build_effnet_model(
         pretrained=pretrained,
         fine_tune=fine_tune,
-        bayes_last=bayesian,
+        bayes_type=bayesian,
         num_classes=num_classes
     ).to(device)
 
@@ -365,7 +366,7 @@ if __name__ == '__main__':
                criterion=criterion,
                pretrained=pretrained,
                num_classes=num_classes,
-               bayes_last=bayesian)
+               bayes_type=bayesian)
 
     # Save the loss and accuracy plots.
     save_plots(model=model,
@@ -373,5 +374,5 @@ if __name__ == '__main__':
                metrics_df=metrics_df,
                pretrained=pretrained,
                num_classes=num_classes,
-               bayes_last=bayesian)
+               bayes_type=bayesian)
     print('TRAINING COMPLETE\n')
