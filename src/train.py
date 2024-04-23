@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import argparse
 import torch.nn as nn
 import torch.optim as optim
@@ -237,10 +238,30 @@ if __name__ == '__main__':
     print(f"[INFO]: Number of training images: {len(train_data)}")
     print(f"[INFO]: Number of validation images: {len(val_data)}")
     print(f"[INFO]: Number of testing images: {len(test_data)}")
+
     if num_classes == 2:
-        print("[INFO]: Class names: ['NORMAL', 'PNEUMONIA'].\n")
+        class_names = ['NORMAL', 'PNEUMONIA']
     else:
-        print("[INFO]: Class names: ['NORMAL', 'VIRUS PNEUMONIA', 'BACTERIA PNEUMONIA'].\n")
+        class_names = ['NORMAL', 'VIRUS PNEUMONIA', 'BACTERIA PNEUMONIA']
+    print(f"[INFO]: Class names: {class_names}.\n")
+
+    print("Training class counts:")
+    class_indices, class_counts = np.unique(pd.DataFrame(train_data).iloc[:, 1], return_counts=True)
+    for i in range(len(class_indices)):
+        print("Class ID", class_indices[i], ": ", class_counts[i])
+
+    print("\nValidation class counts:")
+    class_indices, class_counts = np.unique(pd.DataFrame(val_data).iloc[:, 1], return_counts=True)
+    for i in range(len(class_indices)):
+        print("Class ID", class_indices[i], ": ", class_counts[i])
+
+    print("\nTest class counts:")
+    class_indices, class_counts = np.unique(pd.DataFrame(test_data).iloc[:, 1], return_counts=True)
+    for i in range(len(class_indices)):
+        print("Class ID", class_indices[i], ": ", class_counts[i])
+
+
+
 
     # delete from memory to conserve
     del train_data, val_data, test_data
