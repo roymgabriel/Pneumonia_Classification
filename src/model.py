@@ -3,7 +3,6 @@ from torchvision import models
 from blitz.modules import BayesianLinear, BayesianConv2d
 import torch.nn as nn
 
-# https://debuggercafe.com/transfer-learning-using-efficientnet-pytorch/
 def build_effnet_model(pretrained=True, fine_tune=True, bayes_type=True, num_classes=2):
     if pretrained:
         print('[INFO]: Loading pre-trained weights')
@@ -76,6 +75,7 @@ def build_effnet_model(pretrained=True, fine_tune=True, bayes_type=True, num_cla
         model.classifier[1] = BayesianLinear(block.in_features, num_classes)
 
     else:
+        # Non Bayesian
         block = model.classifier[1]
         model.classifier[1] = nn.Linear(in_features=block.in_features, out_features=num_classes)
 
