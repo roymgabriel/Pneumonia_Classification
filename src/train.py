@@ -5,6 +5,7 @@ import torch.optim as optim
 import time
 from tqdm.auto import tqdm
 from model import build_effnet_model
+from resnet import build_resnet_model
 from datasets import get_data_loaders
 from utils import save_model, save_plots
 from torcheval import metrics
