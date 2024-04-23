@@ -22,7 +22,7 @@ def convert_bottleneck_to_bayesian(bottleneck):
                 bottleneck.downsample[i] = replace_conv_with_bayesian(layer)
 
 
-def build_resnet_model(pretrained=True, fine_tune=True, bayes_type=True, num_classes=2):
+def build_resnet_model(pretrained=True, fine_tune=True, bayes_type='all', num_classes=2):
     if pretrained:
         print('[INFO]: Loading pre-trained weights')
     else:
