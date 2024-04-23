@@ -61,11 +61,12 @@ def evaluate_model_performance(model, class_names, image_label_mapping, image_si
             outputs = model(image)
         outputs = outputs.softmax(1).argmax(1)
         outputs = outputs.detach().numpy()
-        pred_class_name = class_names[np.argmax(outputs[0])]
+        pred_class_name = class_names[outputs[0]]
 
 
         y_true.append(gt_class_name)
         y_pred.append(pred_class_name)
+    y_true = [class_names[label] for label in y_true]
     return y_true, y_pred
 
 
@@ -82,7 +83,7 @@ def plot_classification_results(y_true, y_pred, class_names):
 
     # Compute confusion matrix
     cm = confusion_matrix(y_true, y_pred)
-    plt.figure(figsize=(8, 6))
+    plt.figure(figsize=(12, 8))
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=class_names, yticklabels=class_names)
     plt.xlabel("Predicted")
     plt.ylabel("True")
@@ -131,6 +132,7 @@ if __name__ == '__main__':
     DEVICE = 'cpu'
     num_classes = 3
     IMAGE_SIZE = 224
+    bayes_type = "all"
 
     # read data
     # Load the training and validation datasets.
@@ -143,24 +145,25 @@ if __name__ == '__main__':
         class_names = ['NORMAL', 'VIRUS PNEUMONIA', 'BACTERIA PNEUMONIA']
 
     # Load the trained model.
-    model = build_effnet_model(pretrained=True, fine_tune=False, num_classes=num_classes, bayes_last=False)
+    model = build_effnet_model(pretrained=True, fine_tune=False, num_classes=num_classes, bayes_type=bayes_type)
     if num_classes == 2:
         try:
-            checkpoint = torch.load('../results/binary/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianLast_False_numClass_2.pth', map_location=DEVICE)
+            checkpoint = torch.load('../results/binary/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianType__numClass_2.pth', map_location=DEVICE)
         except:
-            checkpoint = torch.load('./results/binary/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianLast_False_numClass_2.pth', map_location=DEVICE)
+            checkpoint = torch.load('./results/binary/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianType__numClass_2.pth', map_location=DEVICE)
     else:
         try:
-            checkpoint = torch.load('../results/multi/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianLast_False_numClass_3.pth', map_location=DEVICE)
+            checkpoint = torch.load('../results/multi/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianType_all_numClass_3.pth', map_location=DEVICE)
         except:
-            checkpoint = torch.load('./results/multi/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianLast_False_numClass_3.pth', map_location=DEVICE)
+            checkpoint = torch.load('./results/multi/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianType_all_numClass_3.pth', map_location=DEVICE)
 
     print('Loading trained model weights...')
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
 
     # Load ground truth labels from file.
-    image_label_mapping = pd.DataFrame(test_data).iloc[:, 0]
+    # image_label_mapping = pd.DataFrame(test_data).iloc[:, 0]
+    image_label_mapping = {item[0]: item[1] for item in test_data}
     labels_df = pd.DataFrame(test_data).iloc[:, 1]
     labels_df = labels_df.sample(5)
 
