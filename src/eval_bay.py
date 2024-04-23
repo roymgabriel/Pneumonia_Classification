@@ -64,30 +64,66 @@ def evaluate_model_performance(model, class_names, image_label_mapping, image_si
 
         results.append((image_path, mean_probabilities, std_dev_probabilities))
 
+    print("DONE")
+
     return results
 
-def plot_probabilities_with_error_bars(results, class_names):
+# def plot_probabilities_with_error_bars(results, class_names):
 
-    # Adjusted code to create a separate plot for each image
+#     # Adjusted code to create a separate plot for each image
 
+#     for idx, (image_path, means, stds) in enumerate(results):
+#         # Set up the plot
+#         fig, ax = plt.subplots(figsize=(10, 6))  # Use subplots instead of figure for proper axes handling
+#         x = np.arange(len(class_names))  # Adjust x to not offset for each image
+#         ax.bar(x, means, yerr=stds, align='center', alpha=0.7, ecolor='black', capsize=10)
+#         ax.set_ylabel('Probability')
+#         ax.set_xticks(x)
+#         ax.set_xticklabels(class_names)
+#         ax.set_title(f'Image {idx + 1} Class Probabilities with Error Bars')
+#         ax.yaxis.grid(True)
+
+#         # Rotate the x-axis labels so they don't overlap
+#         plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+
+#         # Save or show the plot
+#         plt.tight_layout()
+#         plt.savefig(f'../image_{idx + 1}_probabilities_with_error_bars.png')
+#         plt.show()
+
+def plot_results_with_images(results, class_names, image_label_mapping):
     for idx, (image_path, means, stds) in enumerate(results):
-        # Set up the plot
-        fig, ax = plt.subplots(figsize=(10, 6))  # Use subplots instead of figure for proper axes handling
-        x = np.arange(len(class_names))  # Adjust x to not offset for each image
-        ax.bar(x, means, yerr=stds, align='center', alpha=0.7, ecolor='black', capsize=10)
-        ax.set_ylabel('Probability')
-        ax.set_xticks(x)
-        ax.set_xticklabels(class_names)
-        ax.set_title(f'Image {idx + 1} Class Probabilities with Error Bars')
-        ax.yaxis.grid(True)
+        true_label = class_names[image_label_mapping[image_path]]
 
-        # Rotate the x-axis labels so they don't overlap
-        plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+        # Read the x-ray image
+        xray_image = Image.open(image_path).convert('RGB')
 
-        # Save or show the plot
+        # Set up the plot with 2 subplots: one for the x-ray image, one for the probabilities
+        fig, axs = plt.subplots(1, 2, figsize=(15, 6))
+
+        # Display the x-ray image
+        axs[0].imshow(xray_image, cmap='gray')
+        axs[0].axis('off')  # Hide the axis on the image plot
+        axs[0].set_title(f'Image {idx + 1} (True Label: {true_label})')
+
+        # Plot the class probabilities with error bars
+        x = np.arange(len(class_names))
+        axs[1].bar(x, means, yerr=stds, align='center', alpha=0.7, ecolor='black', capsize=10)
+        axs[1].set_ylabel('Probability')
+        axs[1].set_xticks(x)
+        axs[1].set_xticklabels(class_names, rotation=45, ha='right')
+        axs[1].set_title(f'Predicted Probabilities with Error Bars')
+
+        # Layout settings
+        axs[1].yaxis.grid(True)
         plt.tight_layout()
-        plt.savefig(f'../image_{idx + 1}_probabilities_with_error_bars.png')
+
+        # Saving the plot
+        image_filename = f'../image_{idx + 1}_probabilities_with_xray.png'
+        plt.savefig(image_filename)
         plt.show()
+
+        print(f'Saved the plot for image {idx + 1} as {image_filename}')
 
 
 
@@ -140,4 +176,4 @@ if __name__ == '__main__':
 
     K = 100  # Number of forward passes
     results = evaluate_model_performance(model=model, class_names=class_names, image_label_mapping=image_label_mapping, image_size=IMAGE_SIZE, K=K, device=DEVICE)
-    plot_probabilities_with_error_bars(results, class_names)
+    plot_results_with_images(results, class_names, image_label_mapping)
