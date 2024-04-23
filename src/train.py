@@ -248,17 +248,17 @@ if __name__ == '__main__':
     print("Training class counts:")
     class_indices, class_counts = np.unique(pd.DataFrame(train_data).iloc[:, 1], return_counts=True)
     for i in range(len(class_indices)):
-        print("Class ID", class_indices[i], ": ", class_counts[i])
+        print("Class ID", class_names[class_indices[i]], ": ", class_counts[i])
 
     print("\nValidation class counts:")
     class_indices, class_counts = np.unique(pd.DataFrame(val_data).iloc[:, 1], return_counts=True)
     for i in range(len(class_indices)):
-        print("Class ID", class_indices[i], ": ", class_counts[i])
+        print("Class ID", class_names[class_indices[i]], ": ", class_counts[i])
 
     print("\nTest class counts:")
     class_indices, class_counts = np.unique(pd.DataFrame(test_data).iloc[:, 1], return_counts=True)
     for i in range(len(class_indices)):
-        print("Class ID", class_indices[i], ": ", class_counts[i])
+        print("Class ID", class_names[class_indices[i]], ": ", class_counts[i])
 
 
 
