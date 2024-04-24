@@ -1,0 +1,1 @@
+python train.py --epochs 20 --batchsize 16 --numworkers 4 -pt -ft -by all --numclasses 2 --device cpu --learning-rate 0.0001
