@@ -7,6 +7,7 @@ from torchvision import transforms
 import torch
 import pandas as pd
 from model import build_effnet_model
+from resnet import build_resnet_model
 from datasets import get_data_loaders
 from PIL import Image
 
@@ -45,7 +46,7 @@ def evaluate_model_performance(model, class_names, image_label_mapping, image_si
     for image_path in image_label_mapping:
         # Get the ground truth class name from the image path.
         gt_class_name = image_label_mapping.get(image_path, "Unknown")
-
+        gt_class_name = class_names[gt_class_name]
         image = Image.open(image_path).convert('RGB')
         # orig_image = image.copy()
 
@@ -66,7 +67,6 @@ def evaluate_model_performance(model, class_names, image_label_mapping, image_si
 
         y_true.append(gt_class_name)
         y_pred.append(pred_class_name)
-    y_true = [class_names[label] for label in y_true]
     return y_true, y_pred
 
 
@@ -130,13 +130,13 @@ if __name__ == '__main__':
     # Constants.
     data_dir = "./data/chest_xray/"
     DEVICE = 'cpu'
-    num_classes = 3
+    num_classes = 2
     IMAGE_SIZE = 224
     bayes_type = "all"
 
     # read data
     # Load the training and validation datasets.
-    _, _, test_data, _, _, _ = get_data_loaders(data_dir=data_dir)
+    _, _, test_data, _, _, _ = get_data_loaders(data_dir=data_dir, num_classes = num_classes)
 
     # Class names.
     if num_classes == 2:
@@ -145,17 +145,28 @@ if __name__ == '__main__':
         class_names = ['NORMAL', 'VIRUS PNEUMONIA', 'BACTERIA PNEUMONIA']
 
     # Load the trained model.
-    model = build_effnet_model(pretrained=True, fine_tune=False, num_classes=num_classes, bayes_type=bayes_type)
+    # model = build_effnet_model(pretrained=True, fine_tune=False, num_classes=num_classes, bayes_type=bayes_type)
+    # if num_classes == 2:
+    #     try:
+    #         checkpoint = torch.load('../results/binary/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianType_all_numClass_2.pth', map_location=DEVICE)
+    #     except:
+    #         checkpoint = torch.load('./results/binary/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianType_all_numClass_2.pth', map_location=DEVICE)
+    # else:
+    #     try:
+    #         checkpoint = torch.load('../results/multi/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianType__numClass_3.pth', map_location=DEVICE)
+    #     except:
+    #         checkpoint = torch.load('./results/multi/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianType__numClass_3.pth', map_location=DEVICE)
+    model = build_resnet_model(pretrained=True, fine_tune=False, num_classes=num_classes, bayes_type=bayes_type)
     if num_classes == 2:
         try:
-            checkpoint = torch.load('../results/binary/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianType__numClass_2.pth', map_location=DEVICE)
+            checkpoint = torch.load('../results/binary/modelResNet_pretrained_True_loss_CrossEntropyLoss_bayesianType_all_numClass_2.pth', map_location=DEVICE)
         except:
-            checkpoint = torch.load('./results/binary/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianType__numClass_2.pth', map_location=DEVICE)
+            checkpoint = torch.load('./results/binary/modelResNet_pretrained_True_loss_CrossEntropyLoss_bayesianType_all_numClass_2.pth', map_location=DEVICE)
     else:
         try:
-            checkpoint = torch.load('../results/multi/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianType_all_numClass_3.pth', map_location=DEVICE)
+            checkpoint = torch.load('../results/multi/modelResNet_pretrained_True_loss_CrossEntropyLoss_bayesianType_all_numClass_3.pth', map_location=DEVICE)
         except:
-            checkpoint = torch.load('./results/multi/modelEfficientNet_pretrained_True_loss_CrossEntropyLoss_bayesianType_all_numClass_3.pth', map_location=DEVICE)
+            checkpoint = torch.load('./results/multi/modelResNet_pretrained_True_loss_CrossEntropyLoss_bayesianType_all_numClass_3.pth', map_location=DEVICE)
 
     print('Loading trained model weights...')
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -173,5 +184,4 @@ if __name__ == '__main__':
                                                 image_label_mapping=image_label_mapping,
                                                 image_size=IMAGE_SIZE,
                                                 device=DEVICE)
-
     plot_classification_results(y_true=y_true, y_pred=y_pred, class_names=class_names)
