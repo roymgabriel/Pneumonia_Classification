@@ -119,7 +119,10 @@ def plot_results_with_images(results, class_names, image_label_mapping):
         plt.tight_layout()
 
         # Saving the plot
-        image_filename = f'../image_{idx + 1}_probabilities_with_xray.png'
+        if len(class_names) == 2:
+            image_filename = f'../image_{idx + 1}_probabilities_with_xray_binary.png'
+        else:
+            image_filename = f'../image_{idx + 1}_probabilities_with_xray.png'
         plt.savefig(image_filename)
         plt.show()
 
@@ -132,7 +135,7 @@ if __name__ == '__main__':
     # Constants.
     data_dir = "./data/chest_xray/"
     DEVICE = 'mps'
-    num_classes = 3
+    num_classes = 2
     IMAGE_SIZE = 224
     bayes_type = "last"
 
